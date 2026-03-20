@@ -290,7 +290,6 @@
       padding: 14px 16px;
       display: flex;
       align-items: flex-start;
-      justify-content: space-between;
       gap: 12px;
     }
     .post-item-info { flex: 1; min-width: 0; }
@@ -301,6 +300,15 @@
     .delete-btn:hover { color: var(--danger); }
     .edit-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px; border-radius: 6px; flex-shrink: 0; }
     .edit-btn:hover { color: var(--primary); }
+
+    /* ===== BATCH DELETE ===== */
+    .batch-actions { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; }
+    .select-all-btn { padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; }
+    .select-all-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .batch-delete-btn { padding: 6px 12px; border: 1px solid var(--danger); border-radius: 8px; font-size: 12px; cursor: pointer; background: #fff; color: var(--danger); }
+    .batch-delete-btn:hover { background: var(--danger); color: #fff; }
+    .batch-delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .post-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); margin-right: 10px; margin-top: 2px; }
     .empty-list { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; }
 
     /* ===== EDITABLE PARSE ITEM ===== */
@@ -483,6 +491,10 @@
         </div>
         <div class="list-search">
           <input type="text" class="list-search-input" id="listSearchInput" placeholder="搜索岗位、公司、地点..." oninput="filterPostList()">
+        </div>
+        <div class="batch-actions">
+          <button class="select-all-btn" onclick="toggleSelectAll()">☑️ 全选</button>
+          <button class="batch-delete-btn" id="batchDeleteBtn" onclick="batchDeleteJobs()" disabled>🗑 批量删除</button>
         </div>
         <div class="post-list" id="postList">
           <div class="empty-list">加载中...</div>
@@ -983,6 +995,7 @@
 
     list.innerHTML = jobs.map(job => `
       <div class="post-item" id="item-${job.id}">
+        <input type="checkbox" class="post-checkbox" value="${job.id}" onchange="updateBatchDeleteBtn()">
         <div class="post-item-info">
           <div class="post-item-title">${escHtml(job.title || '无标题')}</div>
           <div class="post-item-meta">
@@ -1000,6 +1013,44 @@
         </div>
       </div>
     `).join('');
+
+    updateBatchDeleteBtn();
+  }
+
+  function toggleSelectAll() {
+    const checkboxes = document.querySelectorAll('.post-checkbox');
+    const allChecked = [...checkboxes].every(c => c.checked);
+    checkboxes.forEach(c => c.checked = !allChecked);
+    updateBatchDeleteBtn();
+  }
+
+  function updateBatchDeleteBtn() {
+    const checked = document.querySelectorAll('.post-checkbox:checked');
+    const btn = document.getElementById('batchDeleteBtn');
+    btn.disabled = checked.length === 0;
+    btn.textContent = checked.length > 0 ? `🗑 批量删除 (${checked.length})` : '🗑 批量删除';
+  }
+
+  async function batchDeleteJobs() {
+    const checked = document.querySelectorAll('.post-checkbox:checked');
+    if (checked.length === 0) return;
+    if (!confirm(`确定要删除选中的 ${checked.length} 条信息吗？`)) return;
+
+    const ids = [...checked].map(c => c.value);
+    let successCount = 0;
+
+    for (const id of ids) {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE_NAME}?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+        if (res.ok) successCount++;
+      } catch (e) {}
+    }
+
+    showToast(`成功删除 ${successCount} 条信息！`, 'success');
+    loadRecentPosts();
   }
 
   // ---- Edit Modal ----

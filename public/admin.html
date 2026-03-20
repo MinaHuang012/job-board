@@ -689,77 +689,51 @@
     }
   }
 
+  // 提取单个字段的辅助函数
+  function extractField(block, fieldName) {
+    // 匹配 【字段名】内容 直到下一个【 或 字符串结尾
+    const regex = new RegExp('【' + fieldName + '】([\\s\\S]*?)(?=\\【|$)', 'i');
+    const match = block.match(regex);
+    if (match && match[1]) {
+      // 去除首尾空白和换行
+      return match[1].trim().replace(/^\n+/, '').replace(/\n+$/, '');
+    }
+    return '';
+  }
+
   function parseJobBlock(block) {
-    const job = { 
-      title: '', 
-      company: '', 
-      location: '', 
-      salary: '', 
-      content: '', 
-      tags: [] 
+    const job = {
+      title: '',
+      company: '',
+      location: '',
+      salary: '',
+      companyIntro: '',
+      jobDesc: '',
+      jobReq: '',
+      apply: '',
+      remark: '',
+      tags: []
     };
 
     // 提取各个字段
-    const fields = {
-      base: /【Base地】([^【]+?)(?=\【|$)/,
-      company: /【公司名称】([^【]+?)(?=\【|$)/,
-      companyIntro: /【公司介绍】([^【]+?)(?=\【|$)/,
-      jobTitle: /【岗位名称】([^【]+?)(?=\【|$)/,
-      jobDesc: /【岗位介绍\/岗位职责】([^【]+?)(?=\【|$)|【岗位介绍】([^【]+?)(?=\【|$)|【岗位职责】([^【]+?)(?=\【|$)/,
-      jobReq: /【岗位要求】([^【]+?)(?=\【|$)/,
-      salary: /【岗位收获\/薪酬】([^【]+?)(?=\【|$)|【薪酬】([^【]+?)(?=\【|$)|【薪资】([^【]+?)(?=\【|$)/,
-      apply: /【简历投递方式\/申请链接】([^【]+?)(?=\【|$)|【申请链接】([^【]+?)(?=\【|$)|【投递方式】([^【]+?)(?=\【|$)/,
-      remark: /【其他备注】([^【]+?)(?=\【|$)/,
-    };
+    job.location = extractField(block, 'Base地');
+    job.company = extractField(block, '公司名称');
+    job.title = extractField(block, '岗位名称');
+    job.companyIntro = extractField(block, '公司介绍');
+    job.jobDesc = extractField(block, '岗位介绍/岗位职责') || extractField(block, '岗位介绍') || extractField(block, '岗位职责');
+    job.jobReq = extractField(block, '岗位要求');
+    job.salary = extractField(block, '岗位收获/薪酬') || extractField(block, '薪酬') || extractField(block, '薪资');
+    job.apply = extractField(block, '简历投递方式/申请链接') || extractField(block, '申请链接') || extractField(block, '投递方式');
+    job.remark = extractField(block, '其他备注');
 
-    // 提取Base地
-    const baseMatch = block.match(fields.base);
-    if (baseMatch) job.location = baseMatch[1].trim();
-    
-    // 提取公司名称
-    const companyMatch = block.match(fields.company);
-    if (companyMatch) job.company = companyMatch[1].trim();
-    
-    // 提取公司介绍
-    const companyIntroMatch = block.match(fields.companyIntro);
-    const companyIntro = companyIntroMatch ? companyIntroMatch[1].trim() : '';
-    
-    // 提取岗位名称
-    const titleMatch = block.match(fields.jobTitle);
-    if (titleMatch) job.title = titleMatch[1].trim();
-    
-    // 提取岗位介绍/岗位职责
-    const descMatch = block.match(fields.jobDesc);
-    const jobDesc = descMatch ? (descMatch[1] || descMatch[2] || descMatch[3] || '').trim() : '';
-    
-    // 提取岗位要求
-    const reqMatch = block.match(fields.jobReq);
-    const jobReq = reqMatch ? reqMatch[1].trim() : '';
-    
-    // 提取薪酬
-    const salaryMatch = block.match(fields.salary);
-    const salary = salaryMatch ? (salaryMatch[1] || salaryMatch[2] || salaryMatch[3] || '').trim() : '';
-    if (salary) job.salary = salary;
-    
-    // 提取投递方式
-    const applyMatch = block.match(fields.apply);
-    const apply = applyMatch ? (applyMatch[1] || applyMatch[2] || applyMatch[3] || '').trim() : '';
-    
-    // 提取备注
-    const remarkMatch = block.match(fields.remark);
-    const remark = remarkMatch ? remarkMatch[1].trim() : '';
-    
-    // 构建content
+    // 构建content（用于显示）
     const contentParts = [];
-    if (job.location) contentParts.push(`【Base地】${job.location}`);
-    if (job.company) contentParts.push(`【公司名称】${job.company}`);
-    if (companyIntro) contentParts.push(`【公司介绍】${companyIntro}`);
-    if (job.title) contentParts.push(`【岗位名称】${job.title}`);
-    if (jobDesc) contentParts.push(`【岗位介绍/岗位职责】${jobDesc}`);
-    if (jobReq) contentParts.push(`【岗位要求】${jobReq}`);
-    if (salary) contentParts.push(`【岗位收获/薪酬】${salary}`);
-    if (apply) contentParts.push(`【简历投递方式/申请链接】${apply}`);
-    if (remark) contentParts.push(`【其他备注】${remark}`);
+    if (job.companyIntro) contentParts.push(`【公司介绍】${job.companyIntro}`);
+    if (job.jobDesc) contentParts.push(`【岗位介绍/岗位职责】${job.jobDesc}`);
+    if (job.jobReq) contentParts.push(`【岗位要求】${job.jobReq}`);
+    if (job.salary) contentParts.push(`【岗位收获/薪酬】${job.salary}`);
+    if (job.apply) contentParts.push(`【简历投递方式/申请链接】${job.apply}`);
+    if (job.remark) contentParts.push(`【其他备注】${job.remark}`);
     job.content = contentParts.join('\n');
 
     // 智能标签

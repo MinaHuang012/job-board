@@ -591,11 +591,18 @@
       const span = document.createElement('span');
       span.className = 'tag-option selected';
       span.dataset.tag = val;
-      span.textContent = val;
-      span.onclick = function() { toggleTag(this); };
+      span.innerHTML = `${escHtml(val)}<span class="tag-remove" onclick="removeCustomTag(this, '${escHtml(val)}')">×</span>`;
+      span.onclick = function(e) { if(e.target.classList.contains('tag-remove')) return; toggleTag(this); };
       selector.appendChild(span);
     }
     input.value = '';
+  }
+
+  function removeCustomTag(el, tagName) {
+    el.parentElement.remove();
+    // 从可用标签列表中移除
+    const idx = availableTags.indexOf(tagName);
+    if (idx > -1) availableTags.splice(idx, 1);
   }
 
   function getSelectedTags() {

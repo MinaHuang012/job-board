@@ -192,6 +192,8 @@
     }
     .tag-option.selected { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
     .tag-option:hover:not(.selected) { border-color: var(--primary); color: var(--primary); }
+    .tag-remove { margin-left: 4px; opacity: 0.6; font-size: 12px; }
+    .tag-remove:hover { opacity: 1; color: var(--danger); }
     .custom-tag-row { display: flex; gap: 8px; margin-top: 10px; }
     .custom-tag-input {
       flex: 1;
@@ -433,19 +435,19 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">选择标签（可多选）</label>
+          <label class="form-label">选择标签（可多选，点击红X删除预设标签）</label>
           <div class="tag-selector" id="tagSelector">
-            <span class="tag-option" data-tag="全职" onclick="toggleTag(this)">全职</span>
-            <span class="tag-option" data-tag="兼职" onclick="toggleTag(this)">兼职</span>
-            <span class="tag-option" data-tag="实习" onclick="toggleTag(this)">实习</span>
-            <span class="tag-option" data-tag="远程" onclick="toggleTag(this)">远程</span>
-            <span class="tag-option" data-tag="技术" onclick="toggleTag(this)">技术</span>
-            <span class="tag-option" data-tag="设计" onclick="toggleTag(this)">设计</span>
-            <span class="tag-option" data-tag="产品" onclick="toggleTag(this)">产品</span>
-            <span class="tag-option" data-tag="运营" onclick="toggleTag(this)">运营</span>
-            <span class="tag-option" data-tag="市场" onclick="toggleTag(this)">市场</span>
-            <span class="tag-option" data-tag="销售" onclick="toggleTag(this)">销售</span>
-            <span class="tag-option" data-tag="应届生" onclick="toggleTag(this)">应届生</span>
+            <span class="tag-option" data-tag="全职" onclick="toggleTag(this)">全职<span class="tag-remove" onclick="removePresetTag(this, '全职')">×</span></span>
+            <span class="tag-option" data-tag="兼职" onclick="toggleTag(this)">兼职<span class="tag-remove" onclick="removePresetTag(this, '兼职')">×</span></span>
+            <span class="tag-option" data-tag="实习" onclick="toggleTag(this)">实习<span class="tag-remove" onclick="removePresetTag(this, '实习')">×</span></span>
+            <span class="tag-option" data-tag="远程" onclick="toggleTag(this)">远程<span class="tag-remove" onclick="removePresetTag(this, '远程')">×</span></span>
+            <span class="tag-option" data-tag="技术" onclick="toggleTag(this)">技术<span class="tag-remove" onclick="removePresetTag(this, '技术')">×</span></span>
+            <span class="tag-option" data-tag="设计" onclick="toggleTag(this)">设计<span class="tag-remove" onclick="removePresetTag(this, '设计')">×</span></span>
+            <span class="tag-option" data-tag="产品" onclick="toggleTag(this)">产品<span class="tag-remove" onclick="removePresetTag(this, '产品')">×</span></span>
+            <span class="tag-option" data-tag="运营" onclick="toggleTag(this)">运营<span class="tag-remove" onclick="removePresetTag(this, '运营')">×</span></span>
+            <span class="tag-option" data-tag="市场" onclick="toggleTag(this)">市场<span class="tag-remove" onclick="removePresetTag(this, '市场')">×</span></span>
+            <span class="tag-option" data-tag="销售" onclick="toggleTag(this)">销售<span class="tag-remove" onclick="removePresetTag(this, '销售')">×</span></span>
+            <span class="tag-option" data-tag="应届生" onclick="toggleTag(this)">应届生<span class="tag-remove" onclick="removePresetTag(this, '应届生')">×</span></span>
           </div>
           <div class="custom-tag-row">
             <input class="custom-tag-input" id="customTagInput" placeholder="自定义标签..." onkeydown="if(event.key==='Enter') addCustomTag()" />
@@ -570,6 +572,13 @@
 
   // ---- Tag toggle ----
   function toggleTag(el) { el.classList.toggle('selected'); }
+
+  function removePresetTag(el, tagName) {
+    el.parentElement.remove();
+    // 同时也从可用标签列表中移除
+    const idx = availableTags.indexOf(tagName);
+    if (idx > -1) availableTags.splice(idx, 1);
+  }
 
   function addCustomTag() {
     const input = document.getElementById('customTagInput');
@@ -736,8 +745,8 @@
     if (job.remark) contentParts.push(`【其他备注】${job.remark}`);
     job.content = contentParts.join('\n');
 
-    // 智能标签
-    const fullText = block.toLowerCase();
+    // 智能标签 - 根据JD内容自动匹配
+    // 1. 工作类型判断（实习/兼职/全职只能选一个）
     if (/实习|在校|应届|校招/i.test(block)) {
       job.tags.push('实习');
     } else if (/兼职|part-time/i.test(block)) {
@@ -745,12 +754,34 @@
     } else {
       job.tags.push('全职');
     }
-    
-    if (/远程|home.?office|在家/i.test(block)) job.tags.push('远程');
-    if (/前端|后端|开发|java|python|react|vue|算法|数据|测试/i.test(block)) job.tags.push('技术');
-    if (/产品|pm/i.test(block)) job.tags.push('产品');
-    if (/设计|ui|ux/i.test(block)) job.tags.push('设计');
-    if (/运营/i.test(block)) job.tags.push('运营');
+
+    // 2. 根据关键词匹配其他标签（只匹配用户保留的标签）
+    const tagKeywords = {
+      '远程': [/远程|home.?office|在家|remote/i],
+      '技术': [/前端|后端|开发|java|python|react|vue|算法|数据|测试|工程师|技术|编程|coding/i],
+      '产品': [/产品|pm|product manager/i],
+      '设计': [/设计|ui|ux|设计师|design/i],
+      '运营': [/运营|用户运营|内容运营|活动运营/i],
+      '市场': [/市场|营销|推广|品牌/i],
+      '销售': [/销售|商务|客户|BD/i],
+      '应届生': [/应届|校招|毕业生/i],
+    };
+
+    // 获取当前用户保留的标签
+    const selector = document.getElementById('tagSelector');
+    const currentTags = [...selector.querySelectorAll('.tag-option')].map(t => t.dataset.tag);
+
+    for (const [tag, patterns] of Object.entries(tagKeywords)) {
+      // 只有当标签存在于用户定义的标签中时才匹配
+      if (currentTags.includes(tag)) {
+        for (const pattern of patterns) {
+          if (pattern.test(block)) {
+            if (!job.tags.includes(tag)) job.tags.push(tag);
+            break;
+          }
+        }
+      }
+    }
 
     // 如果没有标题，用公司+岗位
     if (!job.title) {

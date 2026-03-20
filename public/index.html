@@ -162,6 +162,50 @@
       color: #fff;
     }
 
+    /* ===== FILTER ROW ===== */
+    .filter-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .filter-group-label {
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .location-select {
+      padding: 6px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
+      outline: none;
+      min-width: 120px;
+    }
+    .location-select:focus {
+      border-color: var(--primary);
+    }
+    .clear-filter-btn {
+      padding: 6px 12px;
+      border: none;
+      background: none;
+      color: var(--primary);
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .clear-filter-btn:hover {
+      color: var(--primary-dark);
+    }
+
     /* ===== SORT BAR ===== */
     .sort-bar {
       display: flex;
@@ -430,9 +474,20 @@
 
   <!-- Filters -->
   <div class="filter-section">
-    <div class="filter-label">按标签筛选</div>
-    <div class="tag-filters" id="tagFilters">
-      <button class="tag-btn active" data-tag="all" onclick="filterByTag('all', this)">全部</button>
+    <div class="filter-row">
+      <div class="filter-group">
+        <span class="filter-group-label">标签：</span>
+        <div class="tag-filters" id="tagFilters">
+          <button class="tag-btn active" data-tag="all" onclick="filterByTag('all', this)">全部</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-group-label">Base地：</span>
+        <select class="location-select" id="locationFilter" onchange="filterByLocation(this.value)">
+          <option value="">全部</option>
+        </select>
+      </div>
+      <button class="clear-filter-btn" onclick="clearAllFilters()">清除筛选</button>
     </div>
   </div>
 
@@ -483,6 +538,7 @@
 
   let allJobs = [];
   let currentTag = 'all';
+  let currentLocation = '';
   let searchQuery = '';
 
   // ---- Fetch data ----
@@ -500,6 +556,7 @@
       if (!res.ok) throw new Error('Fetch failed');
       allJobs = await res.json();
       buildTagFilters();
+      buildLocationFilters();
       renderCards();
       updateHeaderStats();
     } catch (e) {
@@ -538,6 +595,51 @@
     renderCards();
   }
 
+  // ---- Build location filters ----
+  function buildLocationFilters() {
+    const locationSet = new Set();
+    allJobs.forEach(j => {
+      // 从content中提取【Base地】
+      if (j.content) {
+        const match = j.content.match(/【Base地】([^【]+?)(?=\【|$)/);
+        if (match) locationSet.add(match[1].trim());
+      }
+      // 也从location字段提取
+      if (j.location) locationSet.add(j.location);
+    });
+    
+    const select = document.getElementById('locationFilter');
+    // 保留"全部"选项
+    select.innerHTML = '<option value="">全部</option>';
+    
+    // 按字母排序
+    const sortedLocations = [...locationSet].sort();
+    sortedLocations.forEach(loc => {
+      const option = document.createElement('option');
+      option.value = loc;
+      option.textContent = loc;
+      select.appendChild(option);
+    });
+  }
+
+  // ---- Filter by location ----
+  function filterByLocation(location) {
+    currentLocation = location;
+    renderCards();
+  }
+
+  // ---- Clear all filters ----
+  function clearAllFilters() {
+    currentTag = 'all';
+    currentLocation = '';
+    searchQuery = '';
+    document.getElementById('searchInput').value = '';
+    document.getElementById('locationFilter').value = '';
+    document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.tag-btn[data-tag="all"]').classList.add('active');
+    renderCards();
+  }
+
   // ---- Search ----
   function doSearch() {
     searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
@@ -558,12 +660,27 @@
       jobs = jobs.filter(j => j.tags && j.tags.includes(currentTag));
     }
 
+    // filter by location
+    if (currentLocation) {
+      jobs = jobs.filter(j => {
+        // 检查location字段
+        if (j.location === currentLocation) return true;
+        // 检查content中的【Base地】
+        if (j.content) {
+          const match = j.content.match(/【Base地】([^【]+?)(?=\【|$)/);
+          if (match && match[1].trim() === currentLocation) return true;
+        }
+        return false;
+      });
+    }
+
     // filter by search
     if (searchQuery) {
       jobs = jobs.filter(j =>
         (j.title || '').toLowerCase().includes(searchQuery) ||
         (j.content || '').toLowerCase().includes(searchQuery) ||
-        (j.company || '').toLowerCase().includes(searchQuery)
+        (j.company || '').toLowerCase().includes(searchQuery) ||
+        (j.location || '').toLowerCase().includes(searchQuery)
       );
     }
 

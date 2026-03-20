@@ -192,6 +192,25 @@
     }
     .tag-option.selected { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
     .tag-option:hover:not(.selected) { border-color: var(--primary); color: var(--primary); }
+    .custom-tag-row { display: flex; gap: 8px; margin-top: 10px; }
+    .custom-tag-input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      font-size: 12px;
+      outline: none;
+    }
+    .custom-tag-input:focus { border-color: var(--primary); }
+    .add-tag-btn {
+      padding: 8px 14px;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .add-tag-btn:hover { border-color: var(--primary); color: var(--primary); }
 
     /* ===== SUBMIT BUTTON ===== */
     .submit-btn {
@@ -382,6 +401,10 @@
             <span class="tag-option" data-tag="销售" onclick="toggleTag(this)">销售</span>
             <span class="tag-option" data-tag="应届生" onclick="toggleTag(this)">应届生</span>
           </div>
+          <div class="custom-tag-row">
+            <input class="custom-tag-input" id="customTagInput" placeholder="自定义标签..." onkeydown="if(event.key==='Enter') addCustomTag()" />
+            <button class="add-tag-btn" onclick="addCustomTag()">+ 添加</button>
+          </div>
         </div>
 
         <button class="submit-btn" id="submitBtn" onclick="submitJob()">🚀 立即发布</button>
@@ -479,6 +502,24 @@
 
   // ---- Tag toggle ----
   function toggleTag(el) { el.classList.toggle('selected'); }
+
+  function addCustomTag() {
+    const input = document.getElementById('customTagInput');
+    const val = input.value.trim();
+    if (!val) return;
+    const selector = document.getElementById('tagSelector');
+    const existing = [...selector.querySelectorAll('.tag-option')].find(t => t.dataset.tag === val);
+    if (existing) { existing.classList.add('selected'); }
+    else {
+      const span = document.createElement('span');
+      span.className = 'tag-option selected';
+      span.dataset.tag = val;
+      span.textContent = val;
+      span.onclick = function() { toggleTag(this); };
+      selector.appendChild(span);
+    }
+    input.value = '';
+  }
 
   function getSelectedTags() {
     return [...document.querySelectorAll('.tag-option.selected')].map(t => t.dataset.tag);

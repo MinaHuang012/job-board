@@ -299,7 +299,45 @@
     .post-item-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
     .delete-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px; border-radius: 6px; flex-shrink: 0; }
     .delete-btn:hover { color: var(--danger); }
+    .edit-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px; border-radius: 6px; flex-shrink: 0; }
+    .edit-btn:hover { color: var(--primary); }
     .empty-list { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; }
+
+    /* ===== EDITABLE PARSE ITEM ===== */
+    .edit-item { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; border: 1.5px solid var(--border); }
+    .edit-item:hover { border-color: var(--primary); }
+    .edit-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .edit-item-num { font-weight: 600; color: var(--primary); font-size: 14px; }
+    .edit-item-remove { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px; }
+    .edit-item-remove:hover { color: var(--danger); }
+    .edit-row { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+    .edit-field { flex: 1; min-width: 140px; }
+    .edit-label { font-size: 11px; color: var(--muted); margin-bottom: 3px; display: block; }
+    .edit-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; }
+    .edit-input:focus { border-color: var(--primary); }
+    .edit-textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; outline: none; min-height: 60px; resize: vertical; font-family: inherit; }
+    .edit-textarea:focus { border-color: var(--primary); }
+    .edit-tags-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+    .edit-tag-btn { padding: 4px 10px; border: 1px solid var(--border); border-radius: 14px; font-size: 12px; cursor: pointer; background: #fff; }
+    .edit-tag-btn.selected { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+    /* ===== LIST SEARCH ===== */
+    .list-search { display: flex; gap: 10px; margin-bottom: 16px; }
+    .list-search-input { flex: 1; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; outline: none; }
+    .list-search-input:focus { border-color: var(--primary); }
+
+    /* ===== EDIT MODAL ===== */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal-overlay.hidden { display: none; }
+    .modal-content { background: #fff; border-radius: 16px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; padding: 24px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-title { font-size: 18px; font-weight: 600; }
+    .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--muted); }
+    .modal-close:hover { color: var(--text); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .modal-save-btn { flex: 1; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 10px; font-size: 14px; cursor: pointer; font-weight: 600; }
+    .modal-save-btn:hover { background: var(--primary-dark); }
+    .modal-cancel-btn { padding: 12px 20px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; font-size: 14px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -440,11 +478,29 @@
     <div id="listTab" style="display:none;">
       <div>
         <div class="section-title">
-          📋 最近发布
+          📋 信息列表
           <button class="refresh-btn" onclick="loadRecentPosts()">刷新</button>
+        </div>
+        <div class="list-search">
+          <input type="text" class="list-search-input" id="listSearchInput" placeholder="搜索岗位、公司、地点..." oninput="filterPostList()">
         </div>
         <div class="post-list" id="postList">
           <div class="empty-list">加载中...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal-overlay hidden" id="editModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title">✏️ 编辑职位信息</span>
+          <button class="modal-close" onclick="closeEditModal()">×</button>
+        </div>
+        <div id="editModalBody"></div>
+        <div class="modal-actions">
+          <button class="modal-cancel-btn" onclick="closeEditModal()">取消</button>
+          <button class="modal-save-btn" onclick="saveEditJob()">保存修改</button>
         </div>
       </div>
     </div>
@@ -718,39 +774,147 @@
     return job;
   }
 
+  // 可用标签列表
+  const availableTags = ['全职', '兼职', '实习', '远程', '技术', '产品', '设计', '运营', '市场', '销售', '应届生'];
+
   function renderParsePreview() {
     const container = document.getElementById('parsePreview');
     if (parsedJobs.length === 0) {
       container.innerHTML = '<div class="parse-empty">未识别到有效职位信息</div>';
       return;
     }
-    
+
     container.innerHTML = parsedJobs.map((job, i) => `
-      <div class="parse-item">
-        <div class="parse-item-title">${i+1}. ${escHtml(job.title)}</div>
-        <div class="parse-item-meta">
-          ${job.company ? '🏢 ' + escHtml(job.company) : ''}
-          ${job.location ? ' 📍 ' + escHtml(job.location) : ''}
-          ${job.salary ? ' 💰 ' + escHtml(job.salary) : ''}
+      <div class="edit-item" data-index="${i}">
+        <div class="edit-item-header">
+          <span class="edit-item-num">职位 ${i+1}</span>
+          <button class="edit-item-remove" onclick="removeParsedJob(${i})" title="移除">✕</button>
         </div>
-        <div class="parse-item-tags">
-          ${job.tags.map(t => `<span class="mini-tag">${t}</span>`).join('')}
+        <div class="edit-row">
+          <div class="edit-field">
+            <label class="edit-label">岗位名称</label>
+            <input class="edit-input" id="edit-title-${i}" value="${escHtml(job.title || '')}">
+          </div>
+          <div class="edit-field">
+            <label class="edit-label">公司名称</label>
+            <input class="edit-input" id="edit-company-${i}" value="${escHtml(job.company || '')}">
+          </div>
+          <div class="edit-field">
+            <label class="edit-label">Base地</label>
+            <input class="edit-input" id="edit-location-${i}" value="${escHtml(job.location || '')}">
+          </div>
+        </div>
+        <div class="edit-row">
+          <div class="edit-field">
+            <label class="edit-label">薪酬/薪资</label>
+            <input class="edit-input" id="edit-salary-${i}" value="${escHtml(job.salary || '')}">
+          </div>
+        </div>
+        <div class="edit-row">
+          <div class="edit-field" style="flex:1">
+            <label class="edit-label">公司介绍</label>
+            <textarea class="edit-textarea" id="edit-companyIntro-${i}">${escHtml(job.companyIntro || '')}</textarea>
+          </div>
+        </div>
+        <div class="edit-row">
+          <div class="edit-field" style="flex:1">
+            <label class="edit-label">岗位介绍/职责</label>
+            <textarea class="edit-textarea" id="edit-jobDesc-${i}">${escHtml(job.jobDesc || '')}</textarea>
+          </div>
+        </div>
+        <div class="edit-row">
+          <div class="edit-field" style="flex:1">
+            <label class="edit-label">岗位要求</label>
+            <textarea class="edit-textarea" id="edit-jobReq-${i}">${escHtml(job.jobReq || '')}</textarea>
+          </div>
+        </div>
+        <div class="edit-row">
+          <div class="edit-field" style="flex:1">
+            <label class="edit-label">简历投递方式/申请链接</label>
+            <input class="edit-input" id="edit-apply-${i}" value="${escHtml(job.apply || '')}">
+          </div>
+        </div>
+        <div class="edit-row">
+          <div class="edit-field" style="flex:1">
+            <label class="edit-label">其他备注</label>
+            <input class="edit-input" id="edit-remark-${i}" value="${escHtml(job.remark || '')}">
+          </div>
+        </div>
+        <div class="edit-tags-row">
+          <label class="edit-label" style="margin:0">标签：</label>
+          ${availableTags.map(tag => `
+            <button class="edit-tag-btn ${(job.tags||[]).includes(tag)?'selected':''}" 
+              data-index="${i}" data-tag="${tag}" onclick="toggleEditTag(this)">${tag}</button>
+          `).join('')}
         </div>
       </div>
     `).join('');
   }
 
+  function removeParsedJob(index) {
+    parsedJobs.splice(index, 1);
+    document.getElementById('parseCount').textContent = parsedJobs.length;
+    const btn = document.getElementById('batchSubmitBtn');
+    btn.disabled = parsedJobs.length === 0;
+    btn.textContent = parsedJobs.length > 0 ? `📤 批量发布全部 (${parsedJobs.length}条)` : '📤 批量发布全部';
+    renderParsePreview();
+  }
+
+  function toggleEditTag(btn) {
+    btn.classList.toggle('selected');
+  }
+
+  // 从编辑表单收集数据
+  function collectEditedJobs() {
+    return parsedJobs.map((job, i) => {
+      const title = document.getElementById(`edit-title-${i}`).value.trim();
+      const company = document.getElementById(`edit-company-${i}`).value.trim();
+      const location = document.getElementById(`edit-location-${i}`).value.trim();
+      const salary = document.getElementById(`edit-salary-${i}`).value.trim();
+      const companyIntro = document.getElementById(`edit-companyIntro-${i}`).value.trim();
+      const jobDesc = document.getElementById(`edit-jobDesc-${i}`).value.trim();
+      const jobReq = document.getElementById(`edit-jobReq-${i}`).value.trim();
+      const apply = document.getElementById(`edit-apply-${i}`).value.trim();
+      const remark = document.getElementById(`edit-remark-${i}`).value.trim();
+
+      // 收集选中的标签
+      const selectedTags = [...document.querySelectorAll(`.edit-tag-btn[data-index="${i}"].selected`)].map(b => b.dataset.tag);
+
+      // 构建content字段
+      let content = '';
+      if (companyIntro) content += `【公司介绍】${companyIntro}\n`;
+      if (jobDesc) content += `【岗位介绍/岗位职责】${jobDesc}\n`;
+      if (jobReq) content += `【岗位要求】${jobReq}\n`;
+      if (salary) content += `【岗位收获/薪酬】${salary}\n`;
+      if (apply) content += `【简历投递方式/申请链接】${apply}\n`;
+      if (remark) content += `【其他备注】${remark}\n`;
+
+      return {
+        title,
+        company,
+        location,
+        salary,
+        content,
+        tags: selectedTags
+      };
+    });
+  }
+
   // ---- Submit Batch ----
   async function submitBatch() {
     if (parsedJobs.length === 0) return;
-    
+
     const btn = document.getElementById('batchSubmitBtn');
     btn.disabled = true;
     btn.textContent = '发布中...';
-    
+
+    // 获取编辑后的数据
+    const jobsToSubmit = collectEditedJobs();
+
     let successCount = 0;
-    
-    for (const job of parsedJobs) {
+
+    for (const job of jobsToSubmit) {
+      if (!job.title) continue; // 跳过空标题
       try {
         const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE_NAME}`, {
           method: 'POST',
@@ -772,7 +936,7 @@
         if (res.ok) successCount++;
       } catch (e) {}
     }
-    
+
     showToast(`成功发布 ${successCount} 条信息！✅`, 'success');
     document.getElementById('batchInput').value = '';
     parsedJobs = [];
@@ -783,33 +947,197 @@
   }
 
   // ---- Recent Posts ----
+  let allJobsList = [];
+
   async function loadRecentPosts() {
     const list = document.getElementById('postList');
     list.innerHTML = '<div class="empty-list">加载中...</div>';
     try {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/${TABLE_NAME}?select=*&order=created_at.desc&limit=20`,
+        `${SUPABASE_URL}/rest/v1/${TABLE_NAME}?select=*&order=created_at.desc&limit=50`,
         { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
       );
-      const jobs = await res.json();
-      if (!jobs.length) { list.innerHTML = '<div class="empty-list">暂无发布记录</div>'; return; }
-      list.innerHTML = jobs.map(job => `
-        <div class="post-item" id="item-${job.id}">
-          <div class="post-item-info">
-            <div class="post-item-title">${escHtml(job.title || '无标题')}</div>
-            <div class="post-item-meta">
-              ${job.company ? `<span>🏢 ${escHtml(job.company)}</span>` : ''}
-              ${job.location ? `<span>📍 ${escHtml(job.location)}</span>` : ''}
-              <span>🕐 ${formatTime(job.created_at)}</span>
-            </div>
-            <div class="post-item-tags">
-              ${(job.tags||[]).map(t => `<span class="mini-tag">${t}</span>`).join('')}
-            </div>
+      allJobsList = await res.json();
+      filterPostList();
+    } catch(e) { list.innerHTML = '<div class="empty-list">加载失败</div>'; }
+  }
+
+  function filterPostList() {
+    const query = document.getElementById('listSearchInput').value.trim().toLowerCase();
+    const list = document.getElementById('postList');
+
+    let jobs = allJobsList;
+    if (query) {
+      jobs = jobs.filter(j =>
+        (j.title || '').toLowerCase().includes(query) ||
+        (j.company || '').toLowerCase().includes(query) ||
+        (j.location || '').toLowerCase().includes(query) ||
+        (j.content || '').toLowerCase().includes(query)
+      );
+    }
+
+    if (!jobs.length) {
+      list.innerHTML = '<div class="empty-list">' + (query ? '没有找到匹配的结果' : '暂无发布记录') + '</div>';
+      return;
+    }
+
+    list.innerHTML = jobs.map(job => `
+      <div class="post-item" id="item-${job.id}">
+        <div class="post-item-info">
+          <div class="post-item-title">${escHtml(job.title || '无标题')}</div>
+          <div class="post-item-meta">
+            ${job.company ? `<span>🏢 ${escHtml(job.company)}</span>` : ''}
+            ${job.location ? `<span>📍 ${escHtml(job.location)}</span>` : ''}
+            <span>🕐 ${formatTime(job.created_at)}</span>
           </div>
+          <div class="post-item-tags">
+            ${(job.tags||[]).map(t => `<span class="mini-tag">${t}</span>`).join('')}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="edit-btn" onclick="openEditModal('${job.id}')" title="编辑">✏️</button>
           <button class="delete-btn" onclick="deleteJob('${job.id}')" title="删除">🗑</button>
         </div>
-      `).join('');
-    } catch(e) { list.innerHTML = '<div class="empty-list">加载失败</div>'; }
+      </div>
+    `).join('');
+  }
+
+  // ---- Edit Modal ----
+  let editingJobId = null;
+
+  function openEditModal(id) {
+    const job = allJobsList.find(j => j.id == id);
+    if (!job) return;
+    editingJobId = id;
+
+    // 从content中提取字段
+    const getContent = (key) => {
+      const match = job.content && job.content.match(new RegExp(key + '([^【]+?)(?=\\【|$)'));
+      return match ? match[1].trim() : '';
+    };
+
+    document.getElementById('editModalBody').innerHTML = `
+      <div class="edit-row">
+        <div class="edit-field">
+          <label class="edit-label">岗位名称</label>
+          <input class="edit-input" id="modal-title" value="${escHtml(job.title || '')}">
+        </div>
+        <div class="edit-field">
+          <label class="edit-label">公司名称</label>
+          <input class="edit-input" id="modal-company" value="${escHtml(job.company || '')}">
+        </div>
+        <div class="edit-field">
+          <label class="edit-label">Base地</label>
+          <input class="edit-input" id="modal-location" value="${escHtml(job.location || '')}">
+        </div>
+      </div>
+      <div class="edit-row">
+        <div class="edit-field">
+          <label class="edit-label">薪酬/薪资</label>
+          <input class="edit-input" id="modal-salary" value="${escHtml(job.salary || '')}">
+        </div>
+      </div>
+      <div class="edit-row">
+        <div class="edit-field" style="flex:1">
+          <label class="edit-label">公司介绍</label>
+          <textarea class="edit-textarea" id="modal-companyIntro">${escHtml(getContent('【公司介绍】'))}</textarea>
+        </div>
+      </div>
+      <div class="edit-row">
+        <div class="edit-field" style="flex:1">
+          <label class="edit-label">岗位介绍/职责</label>
+          <textarea class="edit-textarea" id="modal-jobDesc">${escHtml(getContent('【岗位介绍/岗位职责】'))}</textarea>
+        </div>
+      </div>
+      <div class="edit-row">
+        <div class="edit-field" style="flex:1">
+          <label class="edit-label">岗位要求</label>
+          <textarea class="edit-textarea" id="modal-jobReq">${escHtml(getContent('【岗位要求】'))}</textarea>
+        </div>
+      </div>
+      <div class="edit-row">
+        <div class="edit-field" style="flex:1">
+          <label class="edit-label">简历投递方式/申请链接</label>
+          <input class="edit-input" id="modal-apply" value="${escHtml(getContent('【简历投递方式/申请链接】'))}">
+        </div>
+      </div>
+      <div class="edit-row">
+        <div class="edit-field" style="flex:1">
+          <label class="edit-label">其他备注</label>
+          <input class="edit-input" id="modal-remark" value="${escHtml(getContent('【其他备注】'))}">
+        </div>
+      </div>
+      <div class="edit-tags-row">
+        <label class="edit-label" style="margin:0">标签：</label>
+        ${availableTags.map(tag => `
+          <button class="edit-tag-btn ${(job.tags||[]).includes(tag)?'selected':''}" 
+            data-tag="${tag}" onclick="this.classList.toggle('selected')">${tag}</button>
+        `).join('')}
+      </div>
+    `;
+
+    document.getElementById('editModal').classList.remove('hidden');
+  }
+
+  function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+    editingJobId = null;
+  }
+
+  async function saveEditJob() {
+    if (!editingJobId) return;
+
+    const title = document.getElementById('modal-title').value.trim();
+    if (!title) { showToast('岗位名称不能为空', 'error'); return; }
+
+    const company = document.getElementById('modal-company').value.trim();
+    const location = document.getElementById('modal-location').value.trim();
+    const salary = document.getElementById('modal-salary').value.trim();
+    const companyIntro = document.getElementById('modal-companyIntro').value.trim();
+    const jobDesc = document.getElementById('modal-jobDesc').value.trim();
+    const jobReq = document.getElementById('modal-jobReq').value.trim();
+    const apply = document.getElementById('modal-apply').value.trim();
+    const remark = document.getElementById('modal-remark').value.trim();
+
+    const selectedTags = [...document.querySelectorAll('#editModalBody .edit-tag-btn.selected')].map(b => b.dataset.tag);
+
+    let content = '';
+    if (companyIntro) content += `【公司介绍】${companyIntro}\n`;
+    if (jobDesc) content += `【岗位介绍/岗位职责】${jobDesc}\n`;
+    if (jobReq) content += `【岗位要求】${jobReq}\n`;
+    if (salary) content += `【岗位收获/薪酬】${salary}\n`;
+    if (apply) content += `【简历投递方式/申请链接】${apply}\n`;
+    if (remark) content += `【其他备注】${remark}\n`;
+
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${TABLE_NAME}?id=eq.${editingJobId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          title,
+          company: company || null,
+          location: location || null,
+          salary: salary || null,
+          content,
+          tags: selectedTags,
+        }),
+      });
+
+      if (res.ok) {
+        showToast('修改成功！✅', 'success');
+        closeEditModal();
+        loadRecentPosts();
+      } else {
+        showToast('修改失败', 'error');
+      }
+    } catch(e) {
+      showToast('修改失败', 'error');
+    }
   }
 
   // ---- Delete ----

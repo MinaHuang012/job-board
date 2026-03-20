@@ -654,10 +654,142 @@
     document.querySelectorAll('.tag-option.selected').forEach(t => t.classList.remove('selected'));
   }
 
+  // ---- 检测是否是URL ----
+  function isURL(text) {
+    try {
+      const url = new URL(text.trim());
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
+  // ---- 从URL抓取内容 ----
+  async function fetchURLContent(url) {
+    showToast('正在抓取网页内容...', 'info');
+    try {
+      // 使用 Jina AI 的公开 API 提取网页内容
+      const jinaURL = 'https://r.jina.ai/' + url;
+      const res = await fetch(jinaURL);
+      if (!res.ok) throw new Error('抓取失败');
+      const html = await res.text();
+      return html;
+    } catch (e) {
+      showToast('无法抓取该链接: ' + e.message, 'error');
+      return null;
+    }
+  }
+
+  // ---- 从网页内容中提取JD信息 ----
+  function extractJobFromWebContent(text) {
+    const job = {
+      title: '',
+      company: '',
+      location: '',
+      salary: '',
+      companyIntro: '',
+      jobDesc: '',
+      jobReq: '',
+      apply: '',
+      remark: '',
+      tags: []
+    };
+
+    // 尝试提取公司名称
+    const companyPatterns = [
+      /公司[：:]\s*([^\n]{2,30})/,
+      /招聘\s+([^\n]{2,20})(?:公司|集团)/,
+      /([^\n]{2,10})(?:公司|集团)\s*(?:招聘|实习|全职)/,
+    ];
+    for (const p of companyPatterns) {
+      const m = text.match(p);
+      if (m) { job.company = m[1].trim(); break; }
+    }
+
+    // 尝试提取地点
+    const locPatterns = [
+      /(?:工作地点|base|地点|地点：)\s*([^\n]{2,15})/i,
+      /([北京上海深圳广州杭州成都南京武汉西安]+)[^\n]{0,5}(?:工作|上班)/i,
+    ];
+    for (const p of locPatterns) {
+      const m = text.match(p);
+      if (m) { job.location = m[1].trim(); break; }
+    }
+
+    // 尝试提取薪资
+    const salaryPatterns = [
+      /([\d,]+(?:\s*[-~]\s*[\d,]+)?\s*(?:k|K|千|万|元\/月|元\/天))/,
+      /(?:薪资|薪酬|待遇)\s*[:：]?\s*([^\n]{2,20})/i,
+    ];
+    for (const p of salaryPatterns) {
+      const m = text.match(p);
+      if (m) { job.salary = m[1].trim(); break; }
+    }
+
+    // 尝试提取投递方式
+    const applyPatterns = [
+      /邮箱[：:]\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
+      /简历[^\n@]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i,
+      /(https?:\/\/[^\s]+(?:简历|投递|申请|apply)[^\s]*)/i,
+    ];
+    for (const p of applyPatterns) {
+      const m = text.match(p);
+      if (m) { job.apply = m[1].trim(); break; }
+    }
+
+    // 提取岗位名称（通常在标题附近）
+    const titleMatch = text.match(/(?:招聘|岗位|职位)[：:]\s*([^\n]{2,20})/i);
+    if (titleMatch) job.title = titleMatch[1].trim();
+
+    // 提取岗位描述（取前500字）
+    job.jobDesc = text.substring(0, 500).replace(/[#*]/g, '');
+
+    // 提取联系方式
+    const contactPatterns = [
+      /微信[：:]\s*([a-zA-Z0-9_-]+)/i,
+      /电话[：:]\s*([\d-]{7,15})/,
+    ];
+    for (const p of contactPatterns) {
+      const m = text.match(p);
+      if (m) { job.remark = (job.remark || '') + m[0]; break; }
+    }
+
+    // 智能标签
+    const lowerText = text.toLowerCase();
+    if (/实习|在校|应届|校招/i.test(text)) job.tags.push('实习');
+    else if (/兼职/i.test(text)) job.tags.push('兼职');
+    else job.tags.push('全职');
+
+    if (/远程|home.?office/i.test(text)) job.tags.push('远程');
+    if (/前端|后端|开发|java|python|react|vue|算法|测试|工程师/i.test(text)) job.tags.push('技术');
+    if (/产品|pm/i.test(text)) job.tags.push('产品');
+    if (/设计|ui|ux/i.test(text)) job.tags.push('设计');
+    if (/运营/i.test(text)) job.tags.push('运营');
+
+    return job;
+  }
+
   // ---- Batch Parse (智能解析) ----
-  function parseBatch() {
-    const text = document.getElementById('batchInput').value.trim();
+  async function parseBatch() {
+    let text = document.getElementById('batchInput').value.trim();
     if (!text) { showToast('请先粘贴内容', 'error'); return; }
+
+    // 检测是否是URL
+    if (isURL(text)) {
+      const content = await fetchURLContent(text);
+      if (!content) return;
+      // 从抓取的内容中提取JD信息
+      const job = extractJobFromWebContent(content);
+      if (!job.title) job.title = '职位信息';
+      parsedJobs = [job];
+      document.getElementById('parseCount').textContent = parsedJobs.length;
+      renderParsePreview();
+      const btn = document.getElementById('batchSubmitBtn');
+      btn.disabled = false;
+      btn.textContent = `📤 批量发布全部 (${parsedJobs.length}条)`;
+      showToast('成功从网页提取信息，请检查并修改', 'success');
+      return;
+    }
 
     // 按【Base地】或空行拆分
     let blocks = text.split(/(?=\【Base地\】)/);

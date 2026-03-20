@@ -471,17 +471,7 @@
 【Base地】深圳【公司名称】腾讯【公司介绍】互联网公司【岗位名称】实习生【岗位介绍/岗位职责】实习【岗位要求】在校生【岗位收获/薪酬】5k/月【简历投递方式/申请链接】xqqqx@outlook.com【其他备注】需要现场实习"></textarea>
         </div>
         
-        <!-- 批量导入页的标签管理 -->
-        <div class="form-group">
-          <label class="form-label">标签设置（在此页面添加/删除标签，智能解析将根据这些标签自动匹配）</label>
-          <div class="tag-selector" id="batchTagSelector"></div>
-          <div class="custom-tag-row">
-            <input class="custom-tag-input" id="batchCustomTagInput" placeholder="自定义标签..." onkeydown="if(event.key==='Enter') addBatchCustomTag()" />
-            <button class="add-tag-btn" onclick="addBatchCustomTag()">+ 添加</button>
-          </div>
-        </div>
-
-        <button class="submit-btn" onclick="parseBatch()" style="margin-bottom: 16px;">🔍 智能解析</button>
+        <button class="submit-btn" onclick="parseBatch()" style="margin-bottom: 16px;">🔍 智能解析（将根据"单条发布"页面的标签库自动匹配）</button>
         
         <div class="form-group">
           <label class="form-label">解析预览（<span id="parseCount">0</span>条）</label>
@@ -555,56 +545,6 @@
     document.getElementById('batchTab').style.display = tab === 'batch' ? 'block' : 'none';
     document.getElementById('listTab').style.display = tab === 'list' ? 'block' : 'none';
     if (tab === 'list') loadRecentPosts();
-    if (tab === 'batch') initBatchTags();
-  }
-
-  // ---- 初始化批量导入页面的标签 ----
-  let batchAvailableTags = ['全职', '兼职', '实习', '远程', '技术', '产品', '设计', '运营', '市场', '销售', '应届生'];
-
-  function initBatchTags() {
-    const selector = document.getElementById('batchTagSelector');
-    if (selector.children.length > 0) return; // 已初始化
-
-    selector.innerHTML = batchAvailableTags.map(tag => `
-      <span class="tag-option" data-tag="${tag}" onclick="toggleBatchTag(this)">${tag}<span class="tag-remove" onclick="removeBatchTag(this, '${tag}')">×</span></span>
-    `).join('');
-  }
-
-  function toggleBatchTag(el) { el.classList.toggle('selected'); }
-
-  function removeBatchTag(el, tagName) {
-    el.parentElement.remove();
-    const idx = batchAvailableTags.indexOf(tagName);
-    if (idx > -1) batchAvailableTags.splice(idx, 1);
-  }
-
-  function addBatchCustomTag() {
-    const input = document.getElementById('batchCustomTagInput');
-    const val = input.value.trim();
-    if (!val) return;
-    const selector = document.getElementById('batchTagSelector');
-    const existing = [...selector.querySelectorAll('.tag-option')].find(t => t.dataset.tag === val);
-    if (existing) { existing.classList.add('selected'); }
-    else {
-      const span = document.createElement('span');
-      span.className = 'tag-option selected';
-      span.dataset.tag = val;
-      span.innerHTML = `${escHtml(val)}<span class="tag-remove" onclick="removeBatchCustomTag(this, '${escHtml(val)}')">×</span>`;
-      span.onclick = function(e) { if(e.target.classList.contains('tag-remove')) return; toggleBatchTag(this); };
-      selector.appendChild(span);
-    }
-    input.value = '';
-  }
-
-  function removeBatchCustomTag(el, tagName) {
-    el.parentElement.remove();
-    const idx = batchAvailableTags.indexOf(tagName);
-    if (idx > -1) batchAvailableTags.splice(idx, 1);
-  }
-
-  function getBatchSelectedTags() {
-    const selector = document.getElementById('batchTagSelector');
-    return [...selector.querySelectorAll('.tag-option.selected')].map(t => t.dataset.tag);
   }
 
   // ---- Login ----
@@ -812,17 +752,21 @@
     if (job.remark) contentParts.push(`【其他备注】${job.remark}`);
     job.content = contentParts.join('\n');
 
-    // 智能标签 - 根据JD内容自动匹配批量导入页面定义的标签
-    // 1. 工作类型判断（实习/兼职/全职只能选一个）
-    if (batchAvailableTags.includes('实习') && /实习|在校|应届|校招/i.test(block)) {
+    // 智能标签 - 根据"单条发布"页面的标签库自动匹配
+    // 1. 获取单条发布页面定义的标签库
+    const singleTagSelector = document.getElementById('tagSelector');
+    const singlePageTags = [...singleTagSelector.querySelectorAll('.tag-option')].map(t => t.dataset.tag);
+
+    // 2. 工作类型判断（实习/兼职/全职只能选一个）
+    if (singlePageTags.includes('实习') && /实习|在校|应届|校招/i.test(block)) {
       job.tags.push('实习');
-    } else if (batchAvailableTags.includes('兼职') && /兼职|part-time/i.test(block)) {
+    } else if (singlePageTags.includes('兼职') && /兼职|part-time/i.test(block)) {
       job.tags.push('兼职');
-    } else if (batchAvailableTags.includes('全职')) {
+    } else if (singlePageTags.includes('全职')) {
       job.tags.push('全职');
     }
 
-    // 2. 根据关键词匹配其他标签
+    // 3. 根据关键词匹配其他标签
     const tagKeywords = {
       '远程': [/远程|home.?office|在家|remote/i],
       '技术': [/前端|后端|开发|java|python|react|vue|算法|数据|测试|工程师|技术|编程|coding/i],
@@ -834,12 +778,9 @@
       '应届生': [/应届|校招|毕业生/i],
     };
 
-    // 使用批量导入页面定义的标签
-    const currentBatchTags = [...document.getElementById('batchTagSelector').querySelectorAll('.tag-option')].map(t => t.dataset.tag);
-
     for (const [tag, patterns] of Object.entries(tagKeywords)) {
-      // 只有当标签存在于批量导入页面定义的标签中时才匹配
-      if (currentBatchTags.includes(tag)) {
+      // 只有当标签存在于单条发布页面定义的标签库中时才匹配
+      if (singlePageTags.includes(tag)) {
         for (const pattern of patterns) {
           if (pattern.test(block)) {
             if (!job.tags.includes(tag)) job.tags.push(tag);
@@ -925,10 +866,15 @@
         </div>
         <div class="edit-tags-row">
           <label class="edit-label" style="margin:0">标签：</label>
-          ${batchAvailableTags.map(tag => `
-            <button class="edit-tag-btn ${(job.tags||[]).includes(tag)?'selected':''}"
-              data-index="${i}" data-tag="${tag}" onclick="toggleEditTag(this)">${tag}</button>
-          `).join('')}
+          ${(function() {
+            // 获取单条发布页面的标签库
+            const singleTagSelector = document.getElementById('tagSelector');
+            const singlePageTags = [...singleTagSelector.querySelectorAll('.tag-option')].map(t => t.dataset.tag);
+            return singlePageTags.map(tag => `
+              <button class="edit-tag-btn ${(job.tags||[]).includes(tag)?'selected':''}"
+                data-index="${i}" data-tag="${tag}" onclick="toggleEditTag(this)">${tag}</button>
+            `).join('');
+          })()}
         </div>
       </div>
     `).join('');
